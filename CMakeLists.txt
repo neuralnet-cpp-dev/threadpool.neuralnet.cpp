@@ -29,3 +29,23 @@ target_include_directories(neuralnet_threadpool INTERFACE
     $<INSTALL_INTERFACE:include>)
 target_link_libraries(neuralnet_threadpool INTERFACE neuralnet::base)
 target_compile_features(neuralnet_threadpool INTERFACE cxx_std_23)
+
+# ── 测试（NN_BUILD_TESTS；顶层工程默认 ON，被 add_subdirectory 消费时默认 OFF）──
+# 独立开发/CI：cmake -B build && cmake --build build && ctest --test-dir build
+option(NN_BUILD_TESTS "Build threadpool.neuralnet.cpp tests" ${PROJECT_IS_TOP_LEVEL})
+if(NN_BUILD_TESTS)
+    enable_testing()
+    if(MSVC)
+        add_compile_options(/W4 /permissive- /Zc:preprocessor /utf-8)
+    else()
+        add_compile_options(-fno-exceptions -Wall -Wextra -Wpedantic -Werror)
+    endif()
+    find_package(Threads REQUIRED)
+
+    foreach(_t threadpool parallel)
+        add_executable(threadpool_${_t}_test tests/${_t}_test.cpp)
+        target_link_libraries(threadpool_${_t}_test PRIVATE
+            neuralnet::threadpool Threads::Threads)
+        add_test(NAME threadpool_${_t}_test COMMAND threadpool_${_t}_test)
+    endforeach()
+endif()
