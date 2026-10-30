@@ -21,7 +21,8 @@ int g_fail = 0;
 
 #include "test_common.hpp"
 
-namespace {
+namespace
+{
 
 void test_construction()
 {
@@ -44,7 +45,7 @@ void test_parallel_for_each_full_coverage()
     // 200k 元素 > MIN_CHUNK(1024)*2 → 必然分多块
     constexpr std::size_t kN = 200000;
     std::vector<int> hits(kN, 0);
-    pool.parallel_for_each(hits.begin(), hits.end(), [](int &v) { ++v; });
+    pool.parallel_for_each(hits.begin(), hits.end(), [](int& v) { ++v; });
     bool full = true;
     for (std::size_t i = 0; i < kN; ++i)
         if (hits[i] != 1) full = false;
@@ -52,17 +53,18 @@ void test_parallel_for_each_full_coverage()
 
     // 空区间与单元素
     std::vector<int> empty;
-    pool.parallel_for_each(empty.begin(), empty.end(), [](int &v) { ++v; });
+    pool.parallel_for_each(empty.begin(), empty.end(), [](int& v) { ++v; });
     CHECK(true, "空区间不崩溃");
     std::vector<int> one{0};
-    pool.parallel_for_each(one.begin(), one.end(), [](int &v) { ++v; });
+    pool.parallel_for_each(one.begin(), one.end(), [](int& v) { ++v; });
     CHECK(one[0] == 1, "单元素被访问");
 
     // 小区间（< MIN_CHUNK*2）内部串行回落，结果仍全覆盖
     std::vector<int> small(100, 0);
-    pool.parallel_for_each(small.begin(), small.end(), [](int &v) { ++v; });
+    pool.parallel_for_each(small.begin(), small.end(), [](int& v) { ++v; });
     bool small_ok = true;
-    for (int v : small) if (v != 1) small_ok = false;
+    for (int v : small)
+        if (v != 1) small_ok = false;
     CHECK(small_ok, "小区间（串行回落）全覆盖");
 }
 
@@ -75,12 +77,12 @@ void test_parallel_for_each_indexed()
     std::vector<int> hits(kN, 0);
     std::atomic<std::size_t> bad_index{0};
     pool.parallel_for_each_indexed(hits.begin(), hits.end(),
-        [&](int &v, std::size_t worker_index)
-        {
-            ++v;
-            // worker = 0..3，调用者线程 = 4（= pool size）
-            if (worker_index > kThreads) ++bad_index;
-        });
+                                   [&](int& v, std::size_t worker_index)
+                                   {
+                                       ++v;
+                                       // worker = 0..3，调用者线程 = 4（= pool size）
+                                       if (worker_index > kThreads) ++bad_index;
+                                   });
     CHECK(bad_index.load() == 0, "worker 索引 ∈ [0, size()]");
     bool full = true;
     for (std::size_t i = 0; i < kN; ++i)
@@ -92,7 +94,10 @@ void test_parallel_for_each_indexed()
     nn::ThreadPool single(1);
     std::atomic<std::size_t> nonzero{0};
     single.parallel_for_each_indexed(one_hits.begin(), one_hits.end(),
-        [&](int &, std::size_t wi) { if (wi != 0) ++nonzero; });
+                                     [&](int&, std::size_t wi)
+                                     {
+                                         if (wi != 0) ++nonzero;
+                                     });
     CHECK(nonzero.load() == 0, "单线程回落 index = 0");
 }
 
@@ -103,9 +108,10 @@ void test_parallel_for_blocks_and_samples()
 
     // blocks：块数 <= 线程数，但每块仍完整覆盖
     std::vector<int> hits(64, 0);
-    pool.parallel_for_blocks(hits.begin(), hits.end(), [](int &v) { ++v; });
+    pool.parallel_for_blocks(hits.begin(), hits.end(), [](int& v) { ++v; });
     bool full = true;
-    for (int v : hits) if (v != 1) full = false;
+    for (int v : hits)
+        if (v != 1) full = false;
     CHECK(full, "for_blocks 全覆盖");
 
     // samples：8 样本 × 大工作量
@@ -113,7 +119,8 @@ void test_parallel_for_blocks_and_samples()
     std::vector<int> sample_hits(kSamples, 0);
     pool.parallel_for_samples(kSamples, [&](std::size_t i) { ++sample_hits[i]; });
     bool sfull = true;
-    for (int v : sample_hits) if (v != 1) sfull = false;
+    for (int v : sample_hits)
+        if (v != 1) sfull = false;
     CHECK(sfull, "for_samples 每样本恰好一次");
 
     // 0/1 样本串行回落
@@ -121,7 +128,11 @@ void test_parallel_for_blocks_and_samples()
     pool.parallel_for_samples(0, [&](std::size_t) { ++zero_calls; });
     CHECK(zero_calls.load() == 0, "0 样本不调用回调");
     std::atomic<int> one_calls{0};
-    pool.parallel_for_samples(1, [&](std::size_t i) { if (i == 0) ++one_calls; });
+    pool.parallel_for_samples(1,
+                              [&](std::size_t i)
+                              {
+                                  if (i == 0) ++one_calls;
+                              });
     CHECK(one_calls.load() == 1, "1 样本串行回落且索引 0");
 }
 
@@ -132,10 +143,10 @@ void test_transform_and_reduce()
     // 200k 触发并行路径（chunk_count 多块）
     constexpr std::size_t kN = 200000;
     std::vector<float> in(kN), out(kN, 0.0f);
-    for (std::size_t i = 0; i < kN; ++i) in[i] = static_cast<float>(i) * 0.5f;
+    for (std::size_t i = 0; i < kN; ++i)
+        in[i] = static_cast<float>(i) * 0.5f;
 
-    pool.parallel_transform(in.begin(), in.end(), out.begin(),
-                            [](float x) { return x * 2.0f; });
+    pool.parallel_transform(in.begin(), in.end(), out.begin(), [](float x) { return x * 2.0f; });
     bool tok = true;
     for (std::size_t i = 0; i < kN; ++i)
         if (out[i] != in[i] * 2.0f) tok = false;
@@ -153,17 +164,14 @@ void test_transform_and_reduce()
     // transform_reduce：int 求和（无浮点结合律噪声，可精确对拍）
     std::vector<int> ints(kN);
     std::iota(ints.begin(), ints.end(), 0);          // 0..199999
-    const long long ref_sum =
-        static_cast<long long>(kN) * (kN - 1) / 2;  // 精确闭式
+    const long long ref_sum = static_cast<long long>(kN) * (kN - 1) / 2;  // 精确闭式
     const long long sum = pool.parallel_transform_reduce(
-        ints.begin(), ints.end(), 0LL,
-        [](long long a, long long b) { return a + b; },
+        ints.begin(), ints.end(), 0LL, [](long long a, long long b) { return a + b; },
         [](int x) { return static_cast<long long>(x); });
     CHECK(sum == ref_sum, "一元 transform_reduce 与闭式和一致");
 
     const long long dot = pool.parallel_transform_reduce(
-        ints.begin(), ints.end(), in.begin(), 0LL,
-        [](long long a, long long b) { return a + b; },
+        ints.begin(), ints.end(), in.begin(), 0LL, [](long long a, long long b) { return a + b; },
         [](int x, float y) { return static_cast<long long>(x) * static_cast<long long>(y); });
     CHECK(dot >= 0, "二元 transform_reduce 返回有限值（不崩）");
 }

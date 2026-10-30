@@ -21,7 +21,8 @@ int g_fail = 0;
 
 #include "test_common.hpp"
 
-namespace {
+namespace
+{
 
 // PARALLEL_THRESHOLD = 524288（core_config.hpp）。测试用两档规模：
 //   小 = 阈值/16（必然串行回落）、大 = 阈值 + 阈值/8（必然真并行）
@@ -34,7 +35,7 @@ void test_for_each()
     for (std::size_t kN : {kSmall, kLarge})
     {
         std::vector<int> hits(kN, 0);
-        nn::for_each(hits.begin(), hits.end(), [](int &v) { ++v; });
+        nn::for_each(hits.begin(), hits.end(), [](int& v) { ++v; });
         bool full = true;
         for (std::size_t i = 0; i < kN; ++i)
             if (hits[i] != 1) full = false;
@@ -42,10 +43,10 @@ void test_for_each()
     }
     // 空 / 单元素
     std::vector<int> empty;
-    nn::for_each(empty.begin(), empty.end(), [](int &v) { ++v; });
+    nn::for_each(empty.begin(), empty.end(), [](int& v) { ++v; });
     CHECK(true, "空区间不崩溃");
     std::vector<int> one{0};
-    nn::for_each(one.begin(), one.end(), [](int &v) { ++v; });
+    nn::for_each(one.begin(), one.end(), [](int& v) { ++v; });
     CHECK(one[0] == 1, "单元素");
 }
 
@@ -82,21 +83,17 @@ void test_transform_reduce()
         const long long ref = static_cast<long long>(kN) * (kN + 1) / 2;
 
         const long long sum = nn::transform_reduce(
-            v.begin(), v.end(), 0LL,
-            [](long long a, long long b) { return a + b; },
+            v.begin(), v.end(), 0LL, [](long long a, long long b) { return a + b; },
             [](int x) { return static_cast<long long>(x); });
-        CHECK(sum == ref, kN >= nn::PARALLEL_THRESHOLD
-                              ? "一元 transform_reduce 大输入（并行）"
-                              : "一元 transform_reduce 小输入（串行）");
+        CHECK(sum == ref, kN >= nn::PARALLEL_THRESHOLD ? "一元 transform_reduce 大输入（并行）"
+                                                       : "一元 transform_reduce 小输入（串行）");
 
         // 二元：v 与自身点积的和
         const long long sq = nn::transform_reduce(
-            v.begin(), v.end(), v.begin(), 0LL,
-            [](long long a, long long b) { return a + b; },
+            v.begin(), v.end(), v.begin(), 0LL, [](long long a, long long b) { return a + b; },
             [](int a, int b) { return static_cast<long long>(a) * b; });
         // Σ i² = n(n+1)(2n+1)/6
-        const long long ref_sq =
-            static_cast<long long>(kN) * (kN + 1) * (2 * kN + 1) / 6;
+        const long long ref_sq = static_cast<long long>(kN) * (kN + 1) * (2 * kN + 1) / 6;
         CHECK(sq == ref_sq, "二元 transform_reduce 与 Σi² 一致");
     }
 }
@@ -107,12 +104,17 @@ void test_parallel_for_samples_fallback()
     std::atomic<int> calls{0};
     nn::parallel_for_samples(0, [&](std::size_t) { ++calls; });
     CHECK(calls.load() == 0, "0 样本不调用回调");
-    nn::parallel_for_samples(1, [&](std::size_t i) { if (i == 0) ++calls; });
+    nn::parallel_for_samples(1,
+                             [&](std::size_t i)
+                             {
+                                 if (i == 0) ++calls;
+                             });
     CHECK(calls.load() == 1, "1 样本串行回落且索引 0");
     std::vector<int> hits(16, 0);
     nn::parallel_for_samples(16, [&](std::size_t i) { ++hits[i]; });
     bool full = true;
-    for (int h : hits) if (h != 1) full = false;
+    for (int h : hits)
+        if (h != 1) full = false;
     CHECK(full, "16 样本每样本恰好一次");
 }
 
@@ -123,7 +125,7 @@ void test_parallel_for_blocks()
     for (std::size_t kN : {std::size_t{3}, kSmall, kLarge})
     {
         std::vector<int> hits(kN, 0);
-        nn::parallel_for_blocks(hits.begin(), hits.end(), [](int &v) { ++v; });
+        nn::parallel_for_blocks(hits.begin(), hits.end(), [](int& v) { ++v; });
         bool full = true;
         for (std::size_t i = 0; i < kN; ++i)
             if (hits[i] != 1) full = false;

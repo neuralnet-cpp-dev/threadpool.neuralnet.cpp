@@ -22,125 +22,119 @@
 
 namespace nn
 {
-    // ── 顶层并行算法函数 ─────────────────────────────────────────────────────
-    // 用法与 std::for_each / std::transform 完全一致，内部自动选择串行/并行。
-    // 替代 std::execution::par 的线程创建开销，也替代手写 for 循环。
+// ── 顶层并行算法函数 ─────────────────────────────────────────────────────
+// 用法与 std::for_each / std::transform 完全一致，内部自动选择串行/并行。
+// 替代 std::execution::par 的线程创建开销，也替代手写 for 循环。
 
-    // for_each
-    template<typename Iterator, typename Func>
-    inline void for_each(Iterator first, Iterator last, Func&& func)
+// for_each
+template <typename Iterator, typename Func>
+inline void for_each(Iterator first, Iterator last, Func&& func)
+{
+    const auto n = static_cast<std::size_t>(std::ranges::distance(first, last));
+    if (n >= PARALLEL_THRESHOLD)
     {
-        const auto n = static_cast<std::size_t>(std::ranges::distance(first, last));
-        if (n >= PARALLEL_THRESHOLD)
-        {
-            global_thread_pool().parallel_for_each(first, last, std::forward<Func>(func));
-        }
-        else
-        {
-            for (auto it = first; it != last; ++it)
-                func(*it);
-        }
+        global_thread_pool().parallel_for_each(first, last, std::forward<Func>(func));
     }
+    else
+    {
+        for (auto it = first; it != last; ++it)
+            func(*it);
+    }
+}
 
-    // transform（一元）
-    template<typename InputIt, typename OutputIt, typename UnaryOp>
-    inline void transform(InputIt first, InputIt last, OutputIt d_first, UnaryOp&& op)
+// transform（一元）
+template <typename InputIt, typename OutputIt, typename UnaryOp>
+inline void transform(InputIt first, InputIt last, OutputIt d_first, UnaryOp&& op)
+{
+    const auto n = static_cast<std::size_t>(std::ranges::distance(first, last));
+    if (n >= PARALLEL_THRESHOLD)
     {
-        const auto n = static_cast<std::size_t>(std::ranges::distance(first, last));
-        if (n >= PARALLEL_THRESHOLD)
-        {
-            global_thread_pool().parallel_transform(first, last, d_first, std::forward<UnaryOp>(op));
-        }
-        else
-        {
-            for (; first != last; ++first, ++d_first)
-                *d_first = op(*first);
-        }
+        global_thread_pool().parallel_transform(first, last, d_first, std::forward<UnaryOp>(op));
     }
+    else
+    {
+        for (; first != last; ++first, ++d_first)
+            *d_first = op(*first);
+    }
+}
 
-    // transform（二元）
-    template<typename InputIt1, typename InputIt2, typename OutputIt, typename BinaryOp>
-    inline void transform(InputIt1 first1, InputIt1 last1, InputIt2 first2,
-                          OutputIt d_first, BinaryOp&& op)
+// transform（二元）
+template <typename InputIt1, typename InputIt2, typename OutputIt, typename BinaryOp>
+inline void transform(InputIt1 first1, InputIt1 last1, InputIt2 first2, OutputIt d_first,
+                      BinaryOp&& op)
+{
+    const auto n = static_cast<std::size_t>(std::ranges::distance(first1, last1));
+    if (n >= PARALLEL_THRESHOLD)
     {
-        const auto n = static_cast<std::size_t>(std::ranges::distance(first1, last1));
-        if (n >= PARALLEL_THRESHOLD)
-        {
-            global_thread_pool().parallel_transform(first1, last1, first2, d_first,
-                                                     std::forward<BinaryOp>(op));
-        }
-        else
-        {
-            for (; first1 != last1; ++first1, ++first2, ++d_first)
-                *d_first = op(*first1, *first2);
-        }
+        global_thread_pool().parallel_transform(first1, last1, first2, d_first,
+                                                std::forward<BinaryOp>(op));
     }
+    else
+    {
+        for (; first1 != last1; ++first1, ++first2, ++d_first)
+            *d_first = op(*first1, *first2);
+    }
+}
 
-    // transform_reduce（一元 transform）
-    template<typename InputIt, typename T, typename BinaryReduceOp, typename UnaryTransformOp>
-    inline T transform_reduce(InputIt first, InputIt last, T init,
-                              BinaryReduceOp&& reduce_op, UnaryTransformOp&& transform_op)
+// transform_reduce（一元 transform）
+template <typename InputIt, typename T, typename BinaryReduceOp, typename UnaryTransformOp>
+inline T transform_reduce(InputIt first, InputIt last, T init, BinaryReduceOp&& reduce_op,
+                          UnaryTransformOp&& transform_op)
+{
+    const auto n = static_cast<std::size_t>(std::ranges::distance(first, last));
+    if (n >= PARALLEL_THRESHOLD)
     {
-        const auto n = static_cast<std::size_t>(std::ranges::distance(first, last));
-        if (n >= PARALLEL_THRESHOLD)
-        {
-            return global_thread_pool().parallel_transform_reduce(
-                first, last, init,
-                std::forward<BinaryReduceOp>(reduce_op),
-                std::forward<UnaryTransformOp>(transform_op));
-        }
-        else
-        {
-            T acc = init;
-            for (; first != last; ++first)
-                acc = reduce_op(acc, transform_op(*first));
-            return acc;
-        }
+        return global_thread_pool().parallel_transform_reduce(
+            first, last, init, std::forward<BinaryReduceOp>(reduce_op),
+            std::forward<UnaryTransformOp>(transform_op));
     }
+    else
+    {
+        T acc = init;
+        for (; first != last; ++first)
+            acc = reduce_op(acc, transform_op(*first));
+        return acc;
+    }
+}
 
-    // transform_reduce（二元 transform）
-    template<typename InputIt1, typename InputIt2, typename T,
-             typename BinaryReduceOp, typename BinaryTransformOp>
-    inline T transform_reduce(InputIt1 first1, InputIt1 last1, InputIt2 first2,
-                              T init, BinaryReduceOp&& reduce_op,
-                              BinaryTransformOp&& transform_op)
+// transform_reduce（二元 transform）
+template <typename InputIt1, typename InputIt2, typename T, typename BinaryReduceOp,
+          typename BinaryTransformOp>
+inline T transform_reduce(InputIt1 first1, InputIt1 last1, InputIt2 first2, T init,
+                          BinaryReduceOp&& reduce_op, BinaryTransformOp&& transform_op)
+{
+    const auto n = static_cast<std::size_t>(std::ranges::distance(first1, last1));
+    if (n >= PARALLEL_THRESHOLD)
     {
-        const auto n = static_cast<std::size_t>(std::ranges::distance(first1, last1));
-        if (n >= PARALLEL_THRESHOLD)
-        {
-            return global_thread_pool().parallel_transform_reduce(
-                first1, last1, first2, init,
-                std::forward<BinaryReduceOp>(reduce_op),
-                std::forward<BinaryTransformOp>(transform_op));
-        }
-        else
-        {
-            T acc = init;
-            for (; first1 != last1; ++first1, ++first2)
-                acc = reduce_op(acc, transform_op(*first1, *first2));
-            return acc;
-        }
+        return global_thread_pool().parallel_transform_reduce(
+            first1, last1, first2, init, std::forward<BinaryReduceOp>(reduce_op),
+            std::forward<BinaryTransformOp>(transform_op));
     }
+    else
+    {
+        T acc = init;
+        for (; first1 != last1; ++first1, ++first2)
+            acc = reduce_op(acc, transform_op(*first1, *first2));
+        return acc;
+    }
+}
 
-    // parallel_for_blocks（块级并行，无阈值保护）
-    template<typename Iterator, typename Func>
-    inline void parallel_for_blocks(Iterator first, Iterator last, Func&& func)
-    {
-        global_thread_pool().parallel_for_blocks(first, last, std::forward<Func>(func));
-    }
+// parallel_for_blocks（块级并行，无阈值保护）
+template <typename Iterator, typename Func>
+inline void parallel_for_blocks(Iterator first, Iterator last, Func&& func)
+{ global_thread_pool().parallel_for_blocks(first, last, std::forward<Func>(func)); }
 
-    // parallel_for_samples（样本级并行）
-    template<typename Func>
-    inline void parallel_for_samples(std::size_t num_samples, Func&& func)
+// parallel_for_samples（样本级并行）
+template <typename Func> inline void parallel_for_samples(std::size_t num_samples, Func&& func)
+{
+    if (num_samples <= 1)
     {
-        if (num_samples <= 1)
-        {
-            for (std::size_t i = 0; i < num_samples; ++i)
-                func(i);
-        }
-        else
-        {
-            global_thread_pool().parallel_for_samples(num_samples, std::forward<Func>(func));
-        }
+        for (std::size_t i = 0; i < num_samples; ++i)
+            func(i);
     }
+    else
+    {
+        global_thread_pool().parallel_for_samples(num_samples, std::forward<Func>(func));
+    }
+}
 } // namespace nn
